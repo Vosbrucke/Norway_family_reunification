@@ -19,26 +19,56 @@ FIP_residence_basis_df <- read_csv("Processed_data/FIP_residence_basis_df_full.c
 FIP_relationship_df <- read_csv("Processed_data/FIP_relationship_df_full.csv")
 
 # Total family immigration permits in Norway and their approval rate
-FIP_relationship_df %>% 
+p1 <- FIP_relationship_df %>% 
   filter(citizenship == "Total") %>% 
   ggplot(aes(year, total)) +
   geom_line() +
-  geom_point(aes(size = approval_percentage)) +
-  scale_size_continuous(name = "Approval rate:") +
   labs(
     x = NULL,
     y = NULL,
-    title = "Total family immigration permits in Norway\nand their approval rate, 2014-2020",
-    caption = "Date source: UDI.no"
+    title = "Total family immigration permits in Norway, 2014-2020",
   ) +
-  scale_y_continuous(breaks = seq(8000, 16000, 2000), labels = paste0(seq(8, 16, 2), ".000"), limits = c(8000, 16000)) +
+  scale_y_continuous(
+    breaks = seq(8000, 16000, 2000), 
+    labels = paste0(seq(8, 16, 2), ".000"), 
+    limits = c(8000, 16500),
+    minor_breaks = seq(8000, 16000, 1000)
+    ) +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
     plot.title = element_text(face = "bold"),
-    legend.position = "bottom"
+    legend.position = "bottom",
+    axis.text = element_text(vjust = 0.35)
   ) 
+
+p2 <- FIP_relationship_df %>% 
+  filter(citizenship == "Total") %>% 
+  mutate(approval_percentage = as.numeric(approval_percentage)) %>% 
+  ggplot(aes(year, approval_percentage)) +
+  geom_line() +
+  labs(
+    x = NULL,
+    y = NULL,
+    title = "Approval rate of family immigration permits in Norway, 2014-2020",
+    caption = "Data source: UDI.no"
+  ) +
+  scale_y_continuous(
+    breaks = seq(70, 90, 10),
+    labels = paste0(seq(70, 90, 10), "%"), 
+    limits = c(70, 92),
+    minor_breaks = seq(70, 90, 5)
+    ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom",
+    axis.text = element_text(vjust = 0.35)
+  ) 
+p1 / p2
 
 # Save the plot
 ggsave("Plots/Total family immigration permits in Norway and their approval rate.png", dpi = 900, bg = "white")
@@ -141,7 +171,7 @@ FIP_relationship_df_10 %>%
   geom_hline(yintercept = 60, size = 0.5) +
   geom_line(show.legend = F, size = 0.75) +
   scale_y_continuous(
-    limits = c(60, 102), 
+    limits = c(59.9, 102), 
     breaks = seq(60, 100, 10),
     labels = paste0(seq(60, 100, 10), "%"), 
     expand = c(0, 0)
@@ -149,7 +179,7 @@ FIP_relationship_df_10 %>%
   scale_x_date(
     breaks = c(as.Date("2015-01-01"), as.Date("2020-01-01")),
     date_labels = "%Y",
-    date_minor_breaks = seq.Date(as.Date("2014-01-01"), as.Date("2021-01-01"), by = "1 year")
+    minor_breaks = seq.Date(as.Date("2014-01-01"), as.Date("2021-01-01"), by = "1 year")
     ) +
   labs(
     x = "",
@@ -161,8 +191,8 @@ FIP_relationship_df_10 %>%
   theme(
     axis.text.x = element_text(angle = 0, vjust = 0.5),
     axis.ticks.x = element_line(color = "black", linewidth = 0.3),
-    panel.grid.minor.x = element_line(linetype = "dotted", color  = "lightgrey"),
-    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_line(linetype = "dotted", color  = "lightgrey", linewidth = 0.2),
+    panel.grid.major.x = element_line(linetype = "dotted", color  = "lightgrey", linewidth = 0.2),
     panel.grid.minor.y = element_blank(),
     plot.title= element_text(face = "bold"),
   ) +
@@ -256,7 +286,7 @@ ggsave("Plots/Family reunification permits granted to parents of a sponsor in No
 
 
 # Create a palette of 8 colors
-palette <- wesanderson::wes_palette("Zissou1", n = 8, "continuous")
+palette <- wesanderson::wes_palette("Zissou1", n = 6, "continuous")
 
 # Pivot data on applicants age group and gender
 FIP_age_gender_df_pivots <- FIP_age_gender_df %>% 
@@ -271,7 +301,17 @@ FIP_age_gender_df_pivots <- FIP_age_gender_df %>%
     across(women_girls_0_5_years:adult_men, as.integer)
   ) %>% 
   summarise(across(women_girls_0_5_years:adult_men, sum)) %>% 
-  pivot_longer(women_girls_0_5_years:adult_men) %>% 
+  mutate(
+    girls_6_to_17_years = women_girls_6_10_years + women_girls_11_17_years,
+    boys_6_to_17_years = men_boys_6_10_years + men_boys_11_17_years
+    ) %>% 
+  select(-contains("10"), -contains("11")) %>% 
+  rename(
+    girls_0_to_5_years = women_girls_0_5_years, 
+    boys_0_to_5_years = men_boys_0_5_years, 
+    men_adults = adult_men
+    ) %>% 
+  pivot_longer(girls_0_to_5_years:boys_6_to_17_years) %>% 
   mutate(
     group = case_when(
     str_detect(name, "girls") ~ "girls",
@@ -279,9 +319,8 @@ FIP_age_gender_df_pivots <- FIP_age_gender_df %>%
     TRUE ~ "adults"
     ),
     labels = str_replace_all(name, "_", " "),
-    labels = factor(labels, levels = c(unique(labels)))
-  ) %>% 
-  filter(group %in% "adults")
+    labels = str_replace_all(labels, "to", "-"),
+  )
 
 # Family immigration permits according to the applicant's age group
 FIP_age_gender_df_pivots %>% 
@@ -310,7 +349,7 @@ FIP_age_gender_df_pivots %>%
     panel.grid.minor.x = element_blank(),
     axis.ticks.x = element_line(color = "black")
   ) +
-  facet_wrap(~ group)
+  facet_wrap(~ group, ncol = 3)
 
 # Save the plot
 ggsave("Plots/Family immigration permits according to the applicant's age group.png", dpi = 900, bg = "white")
