@@ -6,6 +6,7 @@ library(magrittr)
 library(janitor)
 library(lubridate)
 library(patchwork)
+library(scales)
 
 
 # Read data frame on Family immigration permits by applicant's citizenship, age group and gender by year
@@ -16,7 +17,6 @@ FIP_residence_basis_df <- read_csv("Processed_data/FIP_residence_basis_df_full.c
 
 # Read data frame on First-time family immigration permits according to the applicant's citizenship and relationship to the person in Norway by year
 FIP_relationship_df <- read_csv("Processed_data/FIP_relationship_df_full.csv")
-
 
 # Total family immigration permits in Norway and their approval rate
 FIP_relationship_df %>% 
@@ -29,7 +29,6 @@ FIP_relationship_df %>%
     x = NULL,
     y = NULL,
     title = "Total family immigration permits in Norway\nand their approval rate, 2014-2020",
-    subtitle = "Permits in thousands",
     caption = "Date source: UDI.no"
   ) +
   scale_y_continuous(breaks = seq(8000, 16000, 2000), labels = paste0(seq(8, 16, 2), ".000"), limits = c(8000, 16000)) +
@@ -44,9 +43,6 @@ FIP_relationship_df %>%
 # Save the plot
 ggsave("Plots/Total family immigration permits in Norway and their approval rate.png", dpi = 900, bg = "white")
 
-## First lets examine from which country there are the most immigrants in the whole period. Then I can show the flow in each year on the separate graph
-## Later step can include a map graph 
-## A graph of 
 
 # Examine countries that received the most immigrants in the whole period of 2014-2021. Pull those countries
 top_10_countries <- FIP_relationship_df %>% 
@@ -74,7 +70,7 @@ FIP_relationship_df %>%
     title = "Family immigration permits in Norway among 10 countries that received\nthe most permits in 2014-2021, by applicant citizenship",
     caption = "Data source: UDI.no"
   ) +
-  scale_x_continuous(breaks = seq(0, 10000, 2500), limits = c(0, 10000)) +
+  scale_x_continuous(breaks = seq(0, 10000, 2500), limits = c(0, 11000), expand = c(0, 0)) +
   scale_fill_viridis_d(name = "", option = "viridis", direction = -1) +
   theme_minimal() +
   theme(
@@ -111,6 +107,7 @@ total_sum <- FIP_relationship_df %>%
 # Calculate the total number of family reunification permits granted for all countries
 total_permits <- FIP_relationship_df %>% 
   select(-approval_percentage) %>% 
+  filter(citizenship != "Total") %>% 
   group_by(citizenship, year) %>%
   summarise(sum = sum(total)) %>%
   ungroup() %>%
@@ -119,7 +116,7 @@ total_permits <- FIP_relationship_df %>%
 # Check the percentage rate of permits granted to the top 10 countries
 total_sum / total_permits
 
-# 
+# Calculate which country out of the chosen ones had the hights approval rate in 2021
 FIP_relationship_df_10 <- FIP_relationship_df %>% 
   filter(citizenship %in% top_10_countries) %>% 
   group_by(citizenship) %>% 
@@ -129,6 +126,7 @@ FIP_relationship_df_10 <- FIP_relationship_df %>%
   arrange(desc(final_sum)) %>% 
   ungroup()
 
+# Pull country names
 FIP_relationship_df_10$citizenship %>% unique()
 
 # Create a structured way to present countries (descending way in two rows)
@@ -140,9 +138,19 @@ FIP_relationship_df_10 %>%
     citizenship = factor(citizenship, levels = levels_citizenships)
   ) %>% 
   ggplot(aes(year, approval_percentage)) +
-  geom_line(show.legend = F) +
-  scale_y_continuous(limits = c(60, 100), labels = paste0(seq(60, 100, 10), "%")) +
-  scale_x_date(breaks = seq.Date(as.Date("2014-01-01"), as.Date("2020-01-01"), by = "2 years"), date_labels = "%y") +
+  geom_hline(yintercept = 60, size = 0.5) +
+  geom_line(show.legend = F, size = 0.75) +
+  scale_y_continuous(
+    limits = c(60, 102), 
+    breaks = seq(60, 100, 10),
+    labels = paste0(seq(60, 100, 10), "%"), 
+    expand = c(0, 0)
+    ) +
+  scale_x_date(
+    breaks = c(as.Date("2015-01-01"), as.Date("2020-01-01")),
+    date_labels = "%Y",
+    date_minor_breaks = seq.Date(as.Date("2014-01-01"), as.Date("2021-01-01"), by = "1 year")
+    ) +
   labs(
     x = "",
     y = "",
@@ -151,9 +159,10 @@ FIP_relationship_df_10 %>%
   ) +
   theme_minimal() +
   theme(
-    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    axis.text.x = element_text(angle = 0, vjust = 0.5),
+    axis.ticks.x = element_line(color = "black", linewidth = 0.3),
+    panel.grid.minor.x = element_line(linetype = "dotted", color  = "lightgrey"),
     panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
     panel.grid.minor.y = element_blank(),
     plot.title= element_text(face = "bold"),
   ) +
@@ -178,9 +187,16 @@ FIP_relationship_df %>%
   group_by(year) %>% 
   summarise(across(spouse_partner:other, sum)) %>% 
   pivot_longer(cols = spouse_partner:other) %>% 
-  ggplot(aes(year, value, color = factor(name, levels = c("spouse_partner", "children", "other", "parents"), labels = c("spouse / partner", "children", "other", "parents")))) +
-  geom_line() +
+  mutate(
+    name = factor(name, levels = c("spouse_partner", "children", "other", "parents"), labels = c("spouse / partner", "children", "other", "parents"))
+  ) %>% 
+  ggplot(aes(year, value)) +
+  geom_line(aes(color = name)) +
+  geom_point(aes(fill = name), size = 1.5, shape = 21, color = "white", stroke = 1) +
+  geom_hline(yintercept = 0, size = 1) +
   scale_color_manual(values = palette, name = "") +
+  scale_fill_manual(values = palette, name = "") +
+  scale_y_continuous(expand = c(0,0), limits = c(0, 8500)) +
   labs(
     x = "",
     y = "",
@@ -191,7 +207,9 @@ FIP_relationship_df %>%
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
-    plot.title= element_text(face = "bold")
+    plot.title= element_text(face = "bold"),
+    axis.ticks.x = element_line(color = "black"),
+    legend.position = "bottom"
   )
 
 # Save the plot
@@ -216,7 +234,7 @@ FIP_relationship_df_parents <- FIP_relationship_df %>%
 FIP_relationship_df_parents %>% 
   ggplot(aes(x = year, y = value)) +
   geom_line(color = palette[4]) +
-  geom_point(size = 2, shape = 21, fill = palette[4], color = "white", stroke = 1) +
+  geom_point(size = 1.5, shape = 21, fill = palette[4], color = "white", stroke = 1) +
   geom_hline(yintercept = 0, size = 1) +
   scale_y_continuous(limits = c(0,640), breaks = seq(0, 600, 100), expand = c(0, 0)) +
   labs(
@@ -229,7 +247,8 @@ FIP_relationship_df_parents %>%
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
-    plot.title= element_text(face = "bold")
+    plot.title= element_text(face = "bold"),
+    axis.ticks.x = element_line(color = "black")
   )
 
 # Save the plot
@@ -261,13 +280,15 @@ FIP_age_gender_df_pivots <- FIP_age_gender_df %>%
     ),
     labels = str_replace_all(name, "_", " "),
     labels = factor(labels, levels = c(unique(labels)))
-  )
+  ) %>% 
+  filter(group %in% "adults")
 
 # Family immigration permits according to the applicant's age group
 FIP_age_gender_df_pivots %>% 
   ggplot(aes(as.Date(year))) +
   geom_line(aes(y = value, color = labels)) +
-  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  geom_point(aes(y = value, fill = labels), size = 1.5, shape = 21, color = "white", stroke = 1) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
   labs(
     x = "",
     y = "",
@@ -275,16 +296,21 @@ FIP_age_gender_df_pivots %>%
     caption = "Data source: UDI.no"
   ) +
   scale_y_continuous(breaks = seq(0, 7000, 1000), limits = c(0, 7100), expand = c(0, 0)) +
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  scale_x_date(
+    breaks = "2 years",
+    date_labels = "%Y"
+    ) +
   scale_color_manual(values = palette, name = "") +
+  scale_fill_manual(values = palette, name = "") +
   theme_minimal() +
   theme(
     plot.title = element_text(face = "bold"),
     axis.text.x = element_text(angle = 90, vjust = 0.5),
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank(),
+    axis.ticks.x = element_line(color = "black")
   ) +
-  facet_wrap(~group)
+  facet_wrap(~ group)
 
 # Save the plot
 ggsave("Plots/Family immigration permits according to the applicant's age group.png", dpi = 900, bg = "white")
